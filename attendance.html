@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monthly Calendar</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        .months-container {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            max-width: 600px;
+            margin: 20px auto;
+        }
+        .month {
+            padding: 20px;
+            background-color: lightblue;
+            cursor: pointer;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+        .days-container {
+            margin-top: 20px;
+        }
+        .day {
+            display: inline-block;
+            margin: 5px;
+            padding: 10px;
+            background-color: lightgray;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .completed {
+            background-color: lightgreen !important;
+        }
+        table {
+            width: 80%;
+            margin: 20px auto;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid black;
+            padding: 10px;
+            text-align: center;
+        }
+        .attendance-summary {
+            margin-top: 20px;
+            font-weight: bold;
+        }
+        .holiday {
+            background-color: red !important;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <h2>Select a Month</h2>
+    <div class="months-container" id="months"></div>
+    <div class="days-container" id="days"></div>
+    <div class="attendance-container" id="attendance"></div>
+    <div class="attendance-summary" id="summary">
+        <p>Total lectures of the day: <span id="Totallectday">0</span></p>
+        <p>Total lectures: <span id="Totallect">0</span></p>
+    </div>
+    
+    <button onclick="Totallectday()">Enter Total Lectures of the Day</button>
+    <button onclick="saveAttendance()">Save Day Result</button>
+    <button onclick="downloadPDF()">Download Attendance Report</button>
+    <button onclick="clearAllData()">Clear All Data</button>
+    <button onclick="markHoliday()">Mark as Holiday</button>
+    <button onclick="clearSelectedDayData()">Clear Selected Day Data</button>
+    
+    <script>
+   const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        let students = [
+            { roll: 2100040100021, name: "DHARMENDRA SOLANKI", totalLectures: 0 },
+            { roll: 2100040100027, name: "GAURAV RATHORE", totalLectures: 0 },
+            { roll: 2100040100041, name: "MANISH DHAKED", totalLectures: 0 },
+            { roll: 2100040100047, name: "NITANSHI VARSHNEY", totalLectures: 0 },
+            { roll: 2100040100056, name: "PRANSHUL SHARMA", totalLectures: 0 },
+            { roll: 2100040100064, name: "SATYAJEET NAYAK", totalLectures: 0 },
+            { roll: 2100040100076, name: "SUMIT KHIRWAR", totalLectures: 0 },
+            { roll: 2200040100001, name: "ABHAY YADAV", totalLectures: 0 },
+            { roll: 2200040100003, name: "ABHINAY SIKARWAR", totalLectures: 0 },
+            { roll: 2200040100004, name: "ABHIRAJ SHARMA", totalLectures: 0 },
+            { roll: 2200040100005, name: "ABHISHEK MISHRA", totalLectures: 0 },
+            { roll: 2200040100008, name: "ABHISHEK YADAV", totalLectures: 0 },
+            { roll: 2200040100009, name: "ADITYA SIKARWAR", totalLectures: 0 },
+            { roll: 2200040100010, name: "AKASH YADAV", totalLectures: 0 },
+        ];
+        let attendanceRecord = JSON.parse(localStorage.getItem("attendanceRecord")) || {};
+        let selectedMonth = null;
+        let selectedDay = null;
+
+        const monthContainer = document.getElementById("months");
+        const daysContainer = document.getElementById("days");
+        const attendanceContainer = document.getElementById("attendance");
+
+        months.forEach((month, index) => {
+            const div = document.createElement("div");
+            div.classList.add("month");
+            div.textContent = month;
+            div.onclick = () => showDays(index + 1);
+            monthContainer.appendChild(div);
+        });
+
+        function showDays(month) {
+    selectedMonth = month;
+    daysContainer.innerHTML = "";
+    attendanceContainer.innerHTML = "";
+    const daysInMonth = new Date(2025, month, 0).getDate();
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dayDiv = document.createElement("div");
+        dayDiv.classList.add("day");
+        dayDiv.textContent = "Day " + day;
+        dayDiv.onclick = () => showAttendance(month, day);
+
+        // Check if the day is a holiday and update UI
+        if (holidayRecord[month] && holidayRecord[month][day]) {
+            dayDiv.classList.add("holiday");
+        }
+
+        daysContainer.appendChild(dayDiv);
+    }
+        }
+
+        function showAttendance(month, day) {
+            selectedDay = day;
+            let tableHTML = `
+                <h3>Attendance for Day ${day}</h3>
+                <table>
+                    <tr>
+                        <th>Roll Number</th>
+                        <th>Name</th>
+                        <th>Lecture 1</th>
+                        <th>Lecture 2</th>
+                        <th>Lecture 3</th>
+                        <th>Present Day Lectures</th>
+                        <th>Total Lectures Taken</th>
+                        <th>Percentage</th>
+                    </tr>`;
+            
+            students.forEach(student => {
+                let checkedLectures = attendanceRecord[month]?.[day]?.[student.roll] || [];
+                let presentDayLectures = checkedLectures.length;
+                let totalLectures = getTotalLectures(student.roll);
+                let percentage = totalLectures > 0 ? ((totalLectures / totalLecturesAll) * 100).toFixed(2) : "0.00";
+
+                tableHTML += `
+                    <tr>
+                        <td>${student.roll}</td>
+                        <td>${student.name}</td>
+                        <td><input type="checkbox" ${checkedLectures.includes(1) ? "checked" : ""} onchange="updateAttendance(${month}, ${day}, ${student.roll}, 1)"></td>
+                        <td><input type="checkbox" ${checkedLectures.includes(2) ? "checked" : ""} onchange="updateAttendance(${month}, ${day}, ${student.roll}, 2)"></td>
+                        <td><input type="checkbox" ${checkedLectures.includes(3) ? "checked" : ""} onchange="updateAttendance(${month}, ${day}, ${student.roll}, 3)"></td>
+                        <td id="present-${student.roll}">${presentDayLectures}</td>
+                        <td id="total-${student.roll}">${totalLectures}</td>
+                        <td id="percentage-${student.roll}">${percentage}%</td>
+                    </tr>`;
+            });
+
+            tableHTML += "</table>";
+            attendanceContainer.innerHTML = tableHTML;
+        }
+
+        function updateAttendance(month, day, roll, lecture) {
+            if (!attendanceRecord[month]) attendanceRecord[month] = {};
+            if (!attendanceRecord[month][day]) attendanceRecord[month][day] = {};
+            if (!attendanceRecord[month][day][roll]) attendanceRecord[month][day][roll] = [];
+            
+            const index = attendanceRecord[month][day][roll].indexOf(lecture);
+            if (index > -1) {
+                attendanceRecord[month][day][roll].splice(index, 1);
+            } else {
+                attendanceRecord[month][day][roll].push(lecture);
+            }
+
+            let presentDayLectures = attendanceRecord[month][day][roll].length;
+            let totalLectures = getTotalLectures(roll);
+            let percentage = totalLectures > 0 ? ((totalLectures / totalLecturesAll) * 100).toFixed(2) : "0.00";
+
+            document.getElementById(`present-${roll}`).textContent = presentDayLectures;
+            document.getElementById(`total-${roll}`).textContent = totalLectures;
+            document.getElementById(`percentage-${roll}`).textContent = percentage + "%";
+        }
+
+        let totalLecturesAll = parseInt(localStorage.getItem("Totallect")) || 0;
+        document.getElementById("Totallect").innerText = totalLecturesAll;
+
+      
+        function getTotalLectures(roll) {
+            let total = 0;
+            for (let month in attendanceRecord) {
+                for (let day in attendanceRecord[month]) {
+                    if (attendanceRecord[month][day][roll]) {
+                        total += attendanceRecord[month][day][roll].length;
+                    }
+                }
+            }
+            return total;
+        }
+
+        function saveAttendance() {
+    if (selectedMonth && selectedDay) {
+        localStorage.setItem("attendanceRecord", JSON.stringify(attendanceRecord));
+        alert("Attendance saved successfully!");
+        markDayAsCompleted(selectedMonth, selectedDay);
+    } else {
+        alert("Please select a day first!");
+    }
+}
+
+function markDayAsCompleted(month, day) {
+    let dayElements = document.querySelectorAll(".day");
+    dayElements.forEach(dayEl => {
+        if (dayEl.textContent === `Day ${day}`) {
+            dayEl.classList.add("completed");
+        }
+    });
+
+    // Store completed days in localStorage to persist after refresh
+    let completedDays = JSON.parse(localStorage.getItem("completedDays")) || {};
+    if (!completedDays[month]) {
+        completedDays[month] = {};
+    }
+    completedDays[month][day] = true;
+    localStorage.setItem("completedDays", JSON.stringify(completedDays));
+}
+
+// Ensure completed days persist after refresh
+document.addEventListener("DOMContentLoaded", function() {
+    let completedDays = JSON.parse(localStorage.getItem("completedDays")) || {};
+    Object.keys(completedDays).forEach(month => {
+        Object.keys(completedDays[month]).forEach(day => {
+            markDayAsCompleted(parseInt(month), parseInt(day));
+        });
+    });
+});
+
+        function downloadPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            doc.text("Attendance Report", 10, 10);
+            let y = 20;
+            students.forEach(student => {
+                doc.text(`${student.name}: ${getTotalLectures(student.roll)} lectures taken`, 10, y);
+                y += 10;
+            });
+            doc.save("Attendance_Report.pdf");
+        }            
+          
+
+
+
+        let totalLectures = parseInt(localStorage.getItem("Totallect")) || 0;
+        document.getElementById("Totallect").innerText = totalLectures;
+        function Totallectday() {
+            let lectures = parseInt(prompt("Enter the total lectures by teacher for the day:")) || 0;
+            document.getElementById("Totallectday").innerText = lectures;
+            totalLectures += lectures;
+            document.getElementById("Totallect").innerText = totalLectures;
+            localStorage.setItem("Totallect", totalLectures);
+            saveToLocalStorage();
+        }
+           
+
+        let holidayRecord = JSON.parse(localStorage.getItem("holidayRecord")) || {};
+
+function markHoliday() {
+    if (!selectedMonth || !selectedDay) {
+        alert("Please select a month and day first!");
+        return;
+    }
+    if (!holidayRecord[selectedMonth]) {
+        holidayRecord[selectedMonth] = {};
+    }
+    holidayRecord[selectedMonth][selectedDay] = true;
+    localStorage.setItem("holidayRecord", JSON.stringify(holidayRecord));
+    alert(`Day ${selectedDay} marked as a holiday!`);
+    updateDayUI(selectedMonth, selectedDay);
+}
+
+function updateDayUI(month, day) {
+    let dayElements = document.querySelectorAll(".day");
+    dayElements.forEach(dayEl => {
+        if (dayEl.textContent === `Day ${day}`) {
+            dayEl.classList.add("holiday");
+        }
+    });
+}
+
+function clearSelectedDayData() {
+    if (!selectedMonth || !selectedDay) {
+        alert("Please select a month and day first!");
+        return;
+    }
+    let attendanceRecord = JSON.parse(localStorage.getItem("attendanceRecord")) || {};
+    if (attendanceRecord[selectedMonth] && attendanceRecord[selectedMonth][selectedDay]) {
+        delete attendanceRecord[selectedMonth][selectedDay];
+        localStorage.setItem("attendanceRecord", JSON.stringify(attendanceRecord));
+        alert(`Attendance data for Day ${selectedDay} has been cleared!`);
+        document.getElementById("attendance").innerHTML = ""; // Clear the displayed table
+    } else {
+        alert(`No attendance data found for Day ${selectedDay}!`);
+    }
+}
+
+// Ensure holidays persist after refresh
+document.addEventListener("DOMContentLoaded", function() {
+    Object.keys(holidayRecord).forEach(month => {
+        Object.keys(holidayRecord[month]).forEach(day => {
+            updateDayUI(parseInt(month), parseInt(day));
+        });
+    });
+});
+
+
+
+        function clearAllData() {
+            if (confirm("Are you sure you want to clear all attendance data? This action cannot be undone.")) {
+                localStorage.clear();
+                alert("All data has been cleared! Restarting...");
+                location.reload();
+            }
+        }
+
+        
+    </script>
+</body>
+</html>
